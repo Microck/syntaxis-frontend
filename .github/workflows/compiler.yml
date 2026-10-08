@@ -20,6 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install build-time TeX support and PDF inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq texlive-latex-extra texlive-fonts-recommended lmodern poppler-utils
       - name: Install isolated compiler harness
         run: |
           npm install --prefix "$RUNNER_TEMP/compiler-test" @siglum/engine@0.1.4 esbuild@0.25.10 playwright@1.55.1
@@ -30,8 +34,6 @@ jobs:
         run: node --experimental-strip-types scripts/verify-compiler.mjs
       - name: Validate real PDF output
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils
           for file in compiler-evidence/*.pdf; do
             pdfinfo "$file"
             pdftotext "$file" - | grep -i 'Alex Morgan'
