@@ -1,0 +1,25 @@
+/node_modules/
+/.next/
+/.vinext/
+/dist/
+/.wrangler/
+/.sites-runtime/
+/.agents/
+/.codex/
+/coverage/
+/test-results/
+/browser-evidence/
+/live-audit/
+.env*
+!.env.example
+*.pem
+*.key
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+.DS_Store
+# Generated third-party runtime and font assets are obtained during preparation.
+/public/latex-worker.js
+/public/fonts/*.woff*
+/public/fonts/*.ttf
+/public/fonts/*.otf
