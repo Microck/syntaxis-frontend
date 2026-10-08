@@ -4,33 +4,24 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { sampleResume, templates, toLatex } from '../lib/resume.ts';
+import { prepareLatexAssets } from './prepare-latex.mjs';
 const root = process.cwd();
-const deps = process.env.COMPILER_TEST_DEPS || root;
-const requireTest = createRequire(path.join(deps, 'package.json'));
-const { chromium } = requireTest('playwright');
-const { build } = requireTest('esbuild');
+const requireTest = createRequire(path.join(process.env.COMPILER_TEST_DEPS || root, 'package.json'));
+const { chromium } = requireTest('playwright'), { build } = requireTest('esbuild');
 mkdirSync('compiler-evidence', { recursive: true });
+await prepareLatexAssets();
 const bundle = await build({
-  stdin: { contents: `
-    import { SiglumCompiler } from '@siglum/engine';
-    import { compileLatexPdf } from './lib/latex-pdf.ts';
-    const original = SiglumCompiler.prototype.compile;
-    SiglumCompiler.prototype.compile = async function(...args) {
-      const result = await original.apply(this, args);
-      window.texDiagnostics = { ...result, pdf: result.pdf ? { type: result.pdf.constructor.name, size: result.pdf.byteLength } : null };
-      if (!result.success) console.error('TEX_DIAGNOSTICS', JSON.stringify(window.texDiagnostics));
-      return result;
-    };
-    window.compileResume = compileLatexPdf;
-  `, resolveDir: root },
+  stdin: { contents: "import { compileLatexPdf } from './lib/latex-pdf.ts'; window.compileResume = compileLatexPdf;", resolveDir: root },
   bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022',
   alias: { '@siglum/engine': requireTest.resolve('@siglum/engine'), 'blake3-wasm/browser.js': path.join(root, 'vendor/siglum-optional-hash.js') },
 });
 const worker = readFileSync(path.join(path.dirname(requireTest.resolve('@siglum/engine')), 'worker.js'));
+const packages = readFileSync('public/latex-packages.json');
 const headers = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp', 'Cache-Control': 'no-store' };
 const server = createServer((req, res) => {
-  if (req.url === '/compiler.js') { res.writeHead(200, { ...headers, 'Content-Type': 'text/javascript' }); res.end(bundle.outputFiles[0].contents); }
-  else if (req.url === '/latex-worker.js') { res.writeHead(200, { ...headers, 'Content-Type': 'text/javascript' }); res.end(worker); }
+  const assets = { '/compiler.js': ['text/javascript', bundle.outputFiles[0].contents], '/latex-worker.js': ['text/javascript', worker], '/latex-packages.json': ['application/json', packages] };
+  const asset = assets[req.url];
+  if (asset) { res.writeHead(200, { ...headers, 'Content-Type': asset[0] }); res.end(asset[1]); }
   else { res.writeHead(200, { ...headers, 'Content-Type': 'text/html' }); res.end('<!doctype html><html><head><title>Syntaxis compiler verification</title></head><body><h1>Original-template browser compilation</h1><pre id="status"></pre><script type="module" src="/compiler.js"></script></body></html>'); }
 });
 await new Promise(resolve => server.listen(5181, '127.0.0.1', resolve));
@@ -38,7 +29,7 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const report = { compiled: [], errors: [], requests: [] };
 page.on('pageerror', error => report.errors.push(error.message));
-page.on('console', message => console.log('BROWSER', message.type(), message.text().slice(0, 14000)));
+page.on('console', message => console.log('BROWSER', message.type(), message.text().slice(0, 2000)));
 page.on('request', request => { if (request.url().startsWith('https:')) report.requests.push({ method: request.method(), url: request.url(), hasBody: Boolean(request.postData()) }); });
 try {
   await page.goto('http://127.0.0.1:5181');
@@ -52,24 +43,11 @@ try {
       return Array.from(new Uint8Array(await blob.arrayBuffer()));
     }, source);
     const pdf = Buffer.from(bytes);
-    assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
-    assert(pdf.length > 1000);
-    writeFileSync(`compiler-evidence/${template.id}.pdf`, pdf);
-    writeFileSync(`compiler-evidence/${template.id}.tex`, source);
-    report.compiled.push({ template: template.id, size: pdf.length });
-    console.log('PASS', template.id, pdf.length, 'bytes');
+    assert.equal(pdf.subarray(0, 5).toString(), '%PDF-'); assert(pdf.length > 1000);
+    writeFileSync(`compiler-evidence/${template.id}.pdf`, pdf); writeFileSync(`compiler-evidence/${template.id}.tex`, source);
+    report.compiled.push({ template: template.id, size: pdf.length }); console.log('PASS', template.id, pdf.length, 'bytes');
   }
   assert(report.requests.every(request => !request.hasBody && request.method === 'GET'), 'Résumé data must never be uploaded during compilation');
   assert.deepEqual(report.errors, []);
-} catch (error) {
-  report.failure = String(error.stack || error);
-  report.engine = await page.evaluate(() => window.texDiagnostics || null).catch(() => null);
-  console.error(report.failure);
-  await page.screenshot({ path: 'compiler-evidence/failure.png', fullPage: true });
-  process.exitCode = 1;
-} finally {
-  writeFileSync('compiler-evidence/report.json', JSON.stringify(report, null, 2));
-  console.log(JSON.stringify(report, null, 2));
-  await browser.close();
-  server.close();
-}
+} catch (error) { report.failure = String(error.stack || error); console.error(report.failure); await page.screenshot({ path: 'compiler-evidence/failure.png', fullPage: true }); process.exitCode = 1; }
+finally { writeFileSync('compiler-evidence/report.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2)); await browser.close(); server.close(); }

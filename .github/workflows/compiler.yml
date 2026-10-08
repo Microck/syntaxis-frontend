@@ -1,13 +1,16 @@
 name: Browser TeX compiler
 on:
-  push:
-    branches: [feat/frontend-latex-verification]
-    paths: ['lib/latex*', 'lib/resume.ts', 'scripts/verify-compiler.mjs', '.github/workflows/compiler.yml']
   pull_request:
-    paths: ['lib/latex*', 'lib/resume.ts', 'scripts/verify-compiler.mjs', '.github/workflows/compiler.yml']
+    paths: ['lib/latex*', 'lib/resume.ts', 'scripts/verify-compiler.mjs', 'scripts/prepare-latex.mjs', 'vendor/**', '.github/workflows/compiler.yml']
+  push:
+    branches: [main]
+    paths: ['lib/latex*', 'lib/resume.ts', 'scripts/verify-compiler.mjs', 'scripts/prepare-latex.mjs', 'vendor/**', '.github/workflows/compiler.yml']
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: compiler-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   compiler:
     runs-on: ubuntu-latest

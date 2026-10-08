@@ -23,8 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
       - name: Core behavior
@@ -52,9 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: syntaxis-frontend-evidence
-          path: |
-            browser-evidence/
-            package-lock.json
+          path: browser-evidence/
           retention-days: 14
   native-latex:
     runs-on: ubuntu-latest
