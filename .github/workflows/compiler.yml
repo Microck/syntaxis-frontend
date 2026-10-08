@@ -1,0 +1,48 @@
+name: Browser TeX compiler
+on:
+  pull_request:
+    paths: ['lib/latex*', 'lib/resume.ts', 'scripts/verify-compiler.mjs', 'scripts/prepare-latex.mjs', 'vendor/**', '.github/workflows/compiler.yml']
+  push:
+    branches: [main]
+    paths: ['lib/latex*', 'lib/resume.ts', 'scripts/verify-compiler.mjs', 'scripts/prepare-latex.mjs', 'vendor/**', '.github/workflows/compiler.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: compiler-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compiler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install build-time TeX support and PDF inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq texlive-latex-extra texlive-fonts-recommended lmodern poppler-utils
+      - name: Install isolated compiler harness
+        run: |
+          npm install --prefix "$RUNNER_TEMP/compiler-test" @siglum/engine@0.1.4 esbuild@0.25.10 playwright@1.55.1
+          "$RUNNER_TEMP/compiler-test/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Compile all original templates in Chromium
+        env:
+          COMPILER_TEST_DEPS: ${{ runner.temp }}/compiler-test
+        run: node --experimental-strip-types scripts/verify-compiler.mjs
+      - name: Validate real PDF output
+        run: |
+          for file in compiler-evidence/*.pdf; do
+            pdfinfo "$file"
+            pdftotext "$file" - | grep -i 'Alex Morgan'
+            pdftoppm -png -scale-to 1400 -singlefile "$file" "${file%.pdf}"
+          done
+      - name: Preserve compilation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntaxis-browser-compiler
+          path: compiler-evidence/
+          retention-days: 14

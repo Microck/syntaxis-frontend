@@ -1,0 +1,50 @@
+name: Live site audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/frontend-latex-verification]
+    paths: ['.github/workflows/live-audit.yml', 'scripts/live-audit.cjs']
+permissions:
+  contents: read
+jobs:
+  live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Inspect available dependency versions
+        run: |
+          npm view @siglum/engine@0.1.4 version dependencies
+          npm view next@16.3.4 version
+          npm view vinext@1.0.0-beta.5 version
+          npm view pnpm@11.25.0 version
+      - name: Install isolated browser harness
+        if: always()
+        run: |
+          npm install --prefix "$RUNNER_TEMP/syntaxis-audit" playwright@1.55.1
+          "$RUNNER_TEMP/syntaxis-audit/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Inspect published Siglum API
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/siglum-inspect"
+          cd "$RUNNER_TEMP/siglum-inspect"
+          npm pack @siglum/engine@0.1.4
+          tar -xzf siglum-engine-0.1.4.tgz
+          cat package/package.json
+          head -100 package/src/index.js
+          head -100 package/src/worker.js
+          grep -nE 'constructor|wasmUrl|workerUrl|busytex|compile\(|onProgress|import\(' package/src/compiler.js | head -80
+      - name: Visit the actual live website in Chromium
+        if: always()
+        run: node scripts/live-audit.cjs
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntaxis-live-audit
+          path: live-audit/
+          retention-days: 14

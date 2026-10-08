@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chromium } from 'playwright';
+const origin = process.env.TEST_ORIGIN || 'http://127.0.0.1:5173';
+mkdirSync('browser-evidence', { recursive: true });
+const browser = await chromium.launch({ headless: true });
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
+const page = await context.newPage();
+page.setDefaultTimeout(20000);
+const report = { origin, checks: [], errors: [], requests: [], pdfs: [] };
+page.on('pageerror', error => report.errors.push(error.message));
+page.on('request', request => { if (request.url().startsWith('https:')) report.requests.push({ url: request.url(), method: request.method(), body: !!request.postData() }); });
+const pass = name => { report.checks.push(name); console.log('PASS ' + name); };
+const capture = name => page.screenshot({ path: `browser-evidence/${name}.png`, fullPage: true });
+const assertNoOverflow = async target => assert.equal(await target.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'Horizontal page overflow');
+async function fieldValue(label, expected) {
+  const field = page.getByLabel(label, { exact: true });
+  const id = await field.getAttribute('id');
+  assert(id, 'Missing field association: ' + label);
+  await page.waitForFunction(({ id, expected }) => document.getElementById(id)?.value === expected, { id, expected });
+  assert.equal(await field.inputValue(), expected);
+}
+async function ready(target) { await target.waitForFunction(() => document.querySelector('.save-status')?.textContent?.includes('Saved on this device')); }
+async function downloadFrom(action, filename) {
+  const pending = page.waitForEvent('download'); await action();
+  const download = await pending; await download.saveAs(`browser-evidence/${filename}`);
+  return readFileSync(`browser-evidence/${filename}`);
+}
+async function compileCurrent(name) {
+  await page.getByRole('button', { name: 'Compile PDF', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('iframe[title="Compiled LaTeX résumé"]') || document.querySelector('.latex-pdf-error'), null, { timeout: 200000 });
+  const error = page.locator('.latex-pdf-error'); if (await error.count()) throw new Error(await error.innerText());
+  const src = await page.locator('iframe[title="Compiled LaTeX résumé"]').getAttribute('src'); assert(src?.startsWith('blob:'));
+  const pdf = await downloadFrom(() => page.locator('.latex-preview-actions').getByRole('button', { name: 'Download', exact: true }).click(), name + '.pdf');
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-'); assert(pdf.length > 1000);
+  report.pdfs.push({ template: name, bytes: pdf.length }); pass('Actual ' + name + ' PDF preview and download');
+}
+try {
+  const response = await page.goto(origin, { waitUntil: 'networkidle' }); assert.equal(response.status(), 200);
+  await page.getByRole('heading', { name: 'Your work. Well told.' }).waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForFunction(() => document.querySelector('[data-decode-text]')?.textContent === 'Well told.' && Number(getComputedStyle(document.querySelector('.hero-description')).opacity) > .99 && Number(getComputedStyle(document.querySelector('.paper-front')).opacity) > .99);
+  await assertNoOverflow(page); await page.screenshot({ path: 'browser-evidence/landing-desktop.png' });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-reveal]')].every(el => Number(getComputedStyle(el).opacity) > .99));
+  await capture('landing-full-reduced-motion');
+  await page.getByRole('link', { name: 'Open workspace', exact: true }).click();
+  await page.getByLabel('Full name', { exact: true }).waitFor(); await ready(page);
+  assert.equal(new URL(page.url()).pathname, '/workspace'); assert.equal(await page.evaluate(() => crossOriginIsolated), true);
+  pass('Landing-to-workspace navigation and cross-origin isolation');
+  await page.getByRole('button', { name: 'Load example', exact: true }).click(); await fieldValue('Full name', 'Alex Morgan');
+  await page.getByLabel('Full name', { exact: true }).fill('Jordan Vale'); await fieldValue('Full name', 'Jordan Vale');
+  await page.waitForFunction(() => document.querySelector('.workspace-paper h2')?.textContent === 'Jordan Vale');
+  await page.getByRole('button', { name: 'Undo last edit', exact: true }).click(); await fieldValue('Full name', 'Alex Morgan');
+  await page.getByRole('button', { name: 'Redo edit', exact: true }).click(); await fieldValue('Full name', 'Jordan Vale');
+  pass('Live editing, undo and redo');
+  await page.getByRole('button', { name: 'Save version', exact: true }).click();
+  await page.getByLabel('Version name', { exact: true }).fill('Browser verification snapshot');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save version', exact: true }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' }); pass('Named local version saved');
+  const backup = await downloadFrom(async () => { await page.getByRole('button', { name: 'Export', exact: true }).click(); await page.getByRole('menuitem', { name: 'JSON backup', exact: true }).click(); }, 'resume.syntaxis.json');
+  assert.equal(JSON.parse(backup.toString()).resume.name, 'Jordan Vale'); pass('JSON download contains authored data');
+  const summary = '  I am a software engineer.  I build thoughtful products.  ';
+  await page.getByLabel('Professional summary', { exact: true }).fill(summary); await fieldValue('Professional summary', summary);
+  await page.getByRole('button', { name: /Try AI edit/ }).click();
+  await page.getByRole('button', { name: 'Simulate connection', exact: true }).click();
+  await page.getByRole('heading', { name: 'Review the edit', exact: true }).waitFor(); await capture('mock-edit-review');
+  await page.getByRole('button', { name: 'Apply edit', exact: true }).click(); await fieldValue('Professional summary', 'software engineer. I build thoughtful products.');
+  await page.getByRole('button', { name: 'Undo last edit', exact: true }).click(); await fieldValue('Professional summary', summary);
+  pass('Explicit mock AI edit and undo');
+  await page.locator('.editor-tab-list').getByRole('tab', { name: 'Design', exact: true }).click();
+  for (const template of ['Vanguard', 'Silicon', 'Genesis']) {
+    await page.locator('.design-choices').getByRole('button', { name: new RegExp(template) }).click();
+    await page.waitForFunction(name => document.querySelector('.design-choice.active .design-name')?.textContent === name, template);
+    await compileCurrent(template.toLowerCase());
+  }
+  assert.equal(new Set(report.pdfs.map(pdf => pdf.bytes)).size, 3, 'Template PDFs should be distinct'); await capture('workspace-compiled-pdf');
+  await page.evaluate(() => { window.print = () => { window.__printText = document.querySelector('.workspace-paper')?.textContent || ''; }; });
+  await page.getByRole('button', { name: 'Export', exact: true }).click(); await page.getByRole('menuitem', { name: 'Print HTML preview', exact: true }).click();
+  await page.waitForFunction(() => window.__printText?.includes('Jordan Vale')); pass('HTML print retains document content after viewing a PDF');
+  const tex = await downloadFrom(async () => { await page.getByRole('button', { name: 'Export', exact: true }).click(); await page.getByRole('menuitem', { name: 'Original template (.tex)', exact: true }).click(); }, 'exported-resume.tex');
+  assert(tex.toString().includes('original genesis template')); assert(tex.toString().includes('Jordan Vale')); pass('Original .tex export matches selected template and data');
+  await page.locator('.latex-preview-actions').getByRole('button', { name: 'View PDF', exact: true }).click(); await page.locator('iframe[title="Compiled LaTeX résumé"]').waitFor();
+  await page.locator('.editor-tab-list').getByRole('tab', { name: 'Content', exact: true }).click();
+  await page.getByLabel('Full name', { exact: true }).fill('Jordan Vale II'); await fieldValue('Full name', 'Jordan Vale II');
+  await page.locator('iframe[title="Compiled LaTeX résumé"]').waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.latex-preview-actions').getByRole('button', { name: 'Download', exact: true }).count(), 0); pass('Editing invalidates stale compiled PDF');
+  await ready(page); await page.reload({ waitUntil: 'networkidle' }); await ready(page); await fieldValue('Full name', 'Jordan Vale II'); pass('Draft survives reload');
+  await page.locator('.editor-tab-list').getByRole('tab', { name: /Versions/ }).click(); await page.getByRole('button', { name: 'Restore', exact: true }).click();
+  await page.locator('.editor-tab-list').getByRole('tab', { name: 'Content', exact: true }).click(); await fieldValue('Full name', 'Jordan Vale'); pass('Saved version restores correctly');
+  await assertNoOverflow(page); await capture('workspace-desktop');
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  const mobile = await mobileContext.newPage(); mobile.on('pageerror', error => report.errors.push('mobile: ' + error.message));
+  await mobile.goto(origin, { waitUntil: 'networkidle' }); await assertNoOverflow(mobile); await mobile.screenshot({ path: 'browser-evidence/landing-mobile.png', fullPage: true });
+  await mobile.getByRole('link', { name: 'Open workspace', exact: true }).click(); await ready(mobile);
+  await mobile.getByRole('button', { name: 'Load example', exact: true }).click(); await mobile.waitForFunction(() => document.querySelector('.workspace-paper h2')?.textContent === 'Alex Morgan');
+  await mobile.locator('.mobile-editor-tabs').getByRole('tab', { name: 'Preview', exact: true }).click(); await mobile.locator('.workspace-paper').waitFor({ state: 'visible' });
+  await assertNoOverflow(mobile); await mobile.screenshot({ path: 'browser-evidence/workspace-mobile.png', fullPage: true });
+  pass('Mobile navigation, preview switch, reduced motion and no overflow'); await mobileContext.close();
+  assert(report.requests.every(r => r.method === 'GET' && !r.body), 'Unexpected external upload');
+  assert(report.requests.every(r => !/^https:\/\/(?:api\.openai\.com|api\.anthropic\.com)/.test(r.url)), 'Unexpected AI request'); pass('No résumé uploads or model API calls');
+  assert.deepEqual(report.errors, []); pass('No unhandled browser errors');
+} catch (error) { report.failure = String(error.stack || error); console.error(report.failure); await capture('failure').catch(() => {}); process.exitCode = 1; }
+finally { writeFileSync('browser-evidence/report.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2)); await browser.close(); }
