@@ -11,7 +11,18 @@ const { chromium } = requireTest('playwright');
 const { build } = requireTest('esbuild');
 mkdirSync('compiler-evidence', { recursive: true });
 const bundle = await build({
-  stdin: { contents: "import { compileLatexPdf } from './lib/latex-pdf.ts'; window.compileResume = compileLatexPdf;", resolveDir: root },
+  stdin: { contents: `
+    import { SiglumCompiler } from '@siglum/engine';
+    import { compileLatexPdf } from './lib/latex-pdf.ts';
+    const original = SiglumCompiler.prototype.compile;
+    SiglumCompiler.prototype.compile = async function(...args) {
+      const result = await original.apply(this, args);
+      window.texDiagnostics = { ...result, pdf: result.pdf ? { type: result.pdf.constructor.name, size: result.pdf.byteLength } : null };
+      if (!result.success) console.error('TEX_DIAGNOSTICS', JSON.stringify(window.texDiagnostics));
+      return result;
+    };
+    window.compileResume = compileLatexPdf;
+  `, resolveDir: root },
   bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022',
   alias: { '@siglum/engine': requireTest.resolve('@siglum/engine'), 'blake3-wasm/browser.js': path.join(root, 'vendor/siglum-optional-hash.js') },
 });
@@ -27,8 +38,8 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const report = { compiled: [], errors: [], requests: [] };
 page.on('pageerror', error => report.errors.push(error.message));
-page.on('console', message => console.log('BROWSER', message.type(), message.text().slice(0, 500)));
-page.on('request', request => { if (!request.url().startsWith('http://127.0.0.1')) report.requests.push({ method: request.method(), url: request.url(), hasBody: Boolean(request.postData()) }); });
+page.on('console', message => console.log('BROWSER', message.type(), message.text().slice(0, 14000)));
+page.on('request', request => { if (request.url().startsWith('https:')) report.requests.push({ method: request.method(), url: request.url(), hasBody: Boolean(request.postData()) }); });
 try {
   await page.goto('http://127.0.0.1:5181');
   await page.waitForFunction(() => typeof window.compileResume === 'function');
@@ -52,6 +63,7 @@ try {
   assert.deepEqual(report.errors, []);
 } catch (error) {
   report.failure = String(error.stack || error);
+  report.engine = await page.evaluate(() => window.texDiagnostics || null).catch(() => null);
   console.error(report.failure);
   await page.screenshot({ path: 'compiler-evidence/failure.png', fullPage: true });
   process.exitCode = 1;

@@ -1,0 +1,9 @@
+/* Accessible interface type sizes; scaled document specimens are visual previews. */
+.eyebrow,.micro,.section-heading>.eyebrow,.hero .eyebrow,.stage-caption .micro,.hero-preview-controls .micro,.template-art-label,.closing-rule .micro{font-size:12px!important}
+.section-index,.nav-count,.source-footnote,.note-number,.note-footer,.site-footer>div,.site-footer button,.footer-copy,.source-strip-inner>p,.hero-footnote{font-size:12px!important}
+.button-small,.hero-actions .text-link,.process-details button,.template-toggle [data-slot=toggle],.template-description p,.note-author,.hero-toolbar button,.site-footer button{font-size:14px!important}
+.stage-caption .micro{max-width:calc(100% - 30px);line-height:1.5}
+.template-art-label{letter-spacing:0;font-size:10px!important}
+.site-footer>div{flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:650px){.hero h1{font-size:clamp(66px,16.3vw,100px)}.hero-actions{gap:16px}.hero-actions .button{font-size:14px}.hero-footnote{flex-wrap:wrap;gap:5px 13px}.hero-stage{min-height:490px}.stage-caption .micro{font-size:10px!important}.hero-preview-controls .micro{font-size:10px!important}.source-brand:last-of-type{font-size:14px}.site-footer>div{justify-content:flex-start;gap:12px 20px}.closing-content p{font-size:12px}.closing-content .button{font-size:14px}.closing-content>div{flex-wrap:wrap}.notes-heading>p{font-size:16px}.field-note>div:nth-child(2)>p{font-size:16px}.header-right .button{font-size:12px!important}.template-art-label{font-size:12px!important}}
+.process-card>p,.template-heading>p,.principles p,.notes-heading>p,.field-note>div:nth-child(2)>p{font-size:16px;line-height:1.7}

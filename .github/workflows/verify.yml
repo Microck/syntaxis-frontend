@@ -1,0 +1,72 @@
+name: Frontend verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: '1'
+      WRANGLER_SEND_METRICS: 'false'
+      CLOUDFLARE_CF_FETCH_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Core behavior
+        if: ${{ !cancelled() }}
+        run: npm run test:core
+      - name: Production build
+        if: ${{ !cancelled() }}
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test the production Worker and browser UI
+        run: |
+          npm start > /tmp/syntaxis-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 2
+          done
+          npm run test:routes
+          npm run test:browser
+      - name: Server diagnostics
+        if: always()
+        run: cat /tmp/syntaxis-server.log || true
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: syntaxis-frontend-evidence
+          path: |
+            browser-evidence/
+            package-lock.json
+          retention-days: 14
+  native-latex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native TeX tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq texlive-latex-extra texlive-fonts-recommended lmodern poppler-utils
+      - name: Compile and inspect 39 PDF fixtures
+        run: npm run test:latex
