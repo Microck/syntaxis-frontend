@@ -1,89 +1,82 @@
 # Syntaxis
 
-A monochrome résumé studio: an animated landing page, editable résumé workspace, three original LaTeX templates, local version history, and real browser PDF compilation.
+A monochrome résumé studio with an animated landing page, editable workspace, original LaTeX templates, local versions, and real browser PDF compilation.
 
-## Run locally
+## Run
 
-Use Node.js 22.13 or newer, npm, and `tar` with XZ support (Linux, macOS, or WSL).
+Use Node.js 22.13+, npm, and a build-time TeX Live installation. On Ubuntu/Debian:
 
 ```sh
+sudo apt-get install texlive-latex-extra texlive-fonts-recommended lmodern
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. For a production build and local Cloudflare Worker preview:
+Open `http://localhost:5173`. Production Worker preview:
 
 ```sh
 npm run build
 npm start
 ```
 
-No API keys or account are required. Leave `.env.example` values unchanged for the standalone experience. The first build obtains the typeface from its publisher, the local Siglum worker from the installed package, and template support files from TeX Live's historic mirrors. Generated assets are not committed to Git.
+No API keys are required. Keep `.env.example` unchanged for the standalone editor and explicitly simulated AI flow. Never put secrets in `NEXT_PUBLIC_*` variables.
 
-## What works
+The build obtains Aspekta from its publisher, copies the installed Siglum worker, and prepares unmodified TeX support files from the build machine's TeX distribution. Font binaries and generated support bundles are not committed to Git. TeX is needed at build/test time, not on the deployed server or a visitor's computer.
 
-- Landing page with GSAP headline, paper-stack, pointer, and scroll choreography; reduced-motion handling.
-- Editable contact details, summary, experience, projects, education, and skills.
-- Local autosave, undo/redo, named versions, and JSON backup import/export.
-- Vanguard, Silicon, and Genesis LaTeX source generation using the original backend designs, with malformed template placeholders and macro calls repaired.
+## Features
+
+- GSAP headline, paper-stack, pointer and scroll animations with reduced-motion handling.
+- Contact details, summary, experience, education, projects, and skills editing.
+- Local autosave, undo/redo, saved versions, and JSON backup import/export.
+- Original Vanguard, Silicon, and Genesis LaTeX designs with malformed placeholders/macros repaired.
 - Actual pdfLaTeX WebAssembly compilation, exact PDF preview, and PDF download.
-- Ten section-heading languages. User-authored text is not automatically translated.
+- Ten section-heading languages; user-authored writing is not translated automatically.
 
-The immediate HTML résumé preview is approximate. **Compile PDF** typesets the original LaTeX source and shows the exact PDF. Changing a draft invalidates an older compiled PDF so it cannot be mistaken for the current document.
+The instant HTML preview is approximate. **Compile PDF** typesets the original `.tex` and shows the exact result. Edits invalidate stale compiled PDFs. The separately labeled HTML print option is not LaTeX compilation.
 
-## Deliberately mocked or disconnected
+## Mock AI and disconnected services
 
-The **Try AI edit — Demo** flow does not authenticate to ChatGPT, invoke a model, or consume credits. It simulates a connection and presents a deterministic edit of existing text for review. Account services, profile imports, and live AI generation remain disabled unless a separate backend is explicitly configured. This repository does not provide an approved subscription-backed ChatGPT integration.
+**Try AI edit — Demo** simulates a connection and tidies existing summary text deterministically. It does not sign in to ChatGPT, invoke an AI model, or consume credits. The user reviews, applies, discards, or undoes the result.
 
-An API adapter is retained in `lib/api.ts`, but no API keys or backend credentials are included. `NEXT_PUBLIC_*` values are public and must never contain secrets.
+An optional backend adapter remains in `lib/api.ts`. Accounts, profile imports, and real AI generation are disabled unless a separate service is explicitly configured. No approved subscription-backed ChatGPT integration, API keys, or deployment credentials are included.
 
-## Browser compiler requirements
+## Browser compilation
 
-Open the site in its own secure browser tab. The WebAssembly worker requires `SharedArrayBuffer` and cross-origin isolation. Development, the generated Worker, and static-asset headers supply:
+Open the website in its own secure tab. The compiler needs `SharedArrayBuffer` and cross-origin isolation. Both development and the production Worker emit:
 
 ```text
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-The first PDF compilation downloads public TeX runtime and bundle assets from `cdn.siglum.org`; résumé source is processed locally in a worker, not uploaded to a compilation service. Compilation therefore still needs network access for uncached assets. A timeout or unsupported browser produces an explicit error and leaves the draft and `.tex` export intact.
+The first compilation downloads public WebAssembly engine/package assets from `cdn.siglum.org`. The résumé source remains in the browser worker; no PDF service or AI provider receives it. Cached public assets may persist locally. Unsupported browsers or a three-minute timeout produce an explicit error without losing the draft or substituting a fake PDF. `.tex` export does not need WebAssembly.
 
-Template support files are prepared from fixed TeX Live 2025 archives, with provenance and SHA-256 hashes recorded in the generated `public/latex-packages.json`. TLS verification is not disabled. Read `LATEX_PIPELINE.md` for details and limitations.
+See `LATEX_PIPELINE.md` for architecture and limitations.
 
-## Verify
+## Tests
 
 ```sh
 npm run typecheck
 npm run test:core
 npm run build
-# In another terminal: npm start
+# Start npm start in another terminal, then:
 npm run test:routes
 npx playwright install --with-deps chromium
 npm run test:browser
-```
-
-Native compilation checks additionally require `pdflatex`, `pdfinfo`, and `pdftotext`:
-
-```sh
+# Requires pdfinfo/pdftotext from poppler-utils:
 npm run test:latex
 ```
 
-GitHub Actions covers the production Worker, desktop and mobile Chromium, downloads, stale-PDF invalidation, mocked AI behavior, and 39 native LaTeX fixtures. A separate workflow isolates browser TeX compilation from the UI build. Screenshots, PDFs, and JSON reports are uploaded as test artifacts.
+GitHub Actions runs the production Worker, desktop/mobile Chromium, three real browser PDF compilations, and 39 native LaTeX fixtures. Screenshots, PDFs, and reports are retained as artifacts. The independent **Live site audit** workflow reports what is currently deployed at `https://syntaxis.cv`, not merely what is in Git.
 
-`Live site audit` independently inspects `https://syntaxis.cv`. It reports the currently deployed website, not merely what exists in this repository. A merged PR is not evidence that the external hosting platform has deployed it.
+## Deploy
 
-## Deployment
+The production build target is Vinext + Cloudflare Workers. Deploy the generated `dist/server/wrangler.json` and associated assets through the authorized hosting pipeline. Preserve isolation headers and include `latex-worker.js` and `latex-packages.json`.
 
-The tested build target is Vinext + Cloudflare Workers. `npm run build` creates `dist/server/wrangler.json` and its assets. Deploy that build through the site's authorized hosting pipeline and preserve the cross-origin isolation headers. This repository intentionally does not contain deployment tokens or an automatic production deployment workflow.
+This repository intentionally has no production deployment token or automatic deployment workflow. Merging a PR does not, by itself, update the separately hosted `syntaxis.cv` site.
 
-## Source map
+## Source and licenses
 
-- `app/`: routes, theme, responsive styles.
-- `components/syntaxis/`: landing page, editor, animation lifecycle, mock assistant.
-- `lib/latex-templates.ts`: repaired original template definitions.
-- `lib/latex.ts`: escaped data-to-LaTeX renderer.
-- `lib/latex-pdf.ts`: browser compilation and dependency loading.
-- `scripts/`: asset preparation and repeatable verification.
-- `COMPONENT_SOURCES.md`, `licenses/`: component provenance and notices.
+`app/` contains routes/styles; `components/syntaxis/` contains the landing/editor; `lib/latex*` contains the original-template renderer/compiler; `scripts/` contains asset preparation and checks.
 
-Font binaries are obtained during asset preparation, not distributed in the source repository. The font license notice must remain with deployed font assets. Third-party components retain their respective licenses; in particular Animate UI includes its Commons Clause condition.
+See `COMPONENT_SOURCES.md` and `licenses/`. Third-party components retain their own licenses, including Animate UI's Commons Clause condition. Silicon retains Trey Hunner's original class notice. TeX package notices remain in the unmodified support files; downstream distribution must preserve their applicable source and license requirements. Font binaries are fetched during preparation, not distributed in this repository; retain `public/fonts/OFL.txt` with deployed font assets.

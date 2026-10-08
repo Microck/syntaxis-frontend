@@ -4,20 +4,19 @@ import { createHash } from 'node:crypto';
 import { join, dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Copy public, unmodified TeX package support files from the build machine's
-// installed TeX distribution. Compilation itself still runs in the browser.
-// No font binaries or user résumé data enter this support bundle.
-const required = ['titlesec.sty', 'enumitem.sty', 'fancyhdr.sty', 'fullpage.sty', 'parskip.sty', 'geometry.sty', 'marvosym.sty'];
+// Copy unmodified TeX package text from the build machine. No font binaries,
+// user data, native executable, or native compiler is included in this bundle.
+const required = ['titlesec.sty', 'enumitem.sty', 'fancyhdr.sty', 'fullpage.sty', 'parskip.sty', 'geometry.sty', 'marvosym.sty', 'etoolbox.sty', 'kvoptions.sty', 'kvsetkeys.sty', 'ltxcmds.sty', 'infwarerr.sty'];
 export async function prepareLatexAssets() {
   const files = {}, provenance = [];
   let distribution;
   try { distribution = execFileSync('pdflatex', ['--version'], { encoding: 'utf8' }).split('\n')[0]; }
-  catch { throw new Error('Build-time TeX support is missing. Install texlive-latex-extra and texlive-fonts-recommended (or a TeX Live distribution providing kpsewhich). PDF compilation runs in the browser after deployment.'); }
+  catch { throw new Error('Build-time TeX support is missing. Install texlive-latex-extra, texlive-fonts-recommended, and lmodern (or the equivalent TeX Live packages). PDF compilation runs in the browser after deployment.'); }
   const directories = new Set();
   for (const name of required) {
     let located;
     try { located = execFileSync('kpsewhich', [name], { encoding: 'utf8' }).trim(); }
-    catch { throw new Error(`Required template dependency ${name} is not installed. Install texlive-latex-extra and texlive-fonts-recommended.`); }
+    catch { throw new Error(`Required template dependency ${name} is not installed.`); }
     if (!located) throw new Error('Missing TeX dependency: ' + name);
     directories.add(dirname(located));
   }

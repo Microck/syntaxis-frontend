@@ -1,48 +1,42 @@
 # Original-template LaTeX pipeline
 
-## Data and rendering
+## Rendering
 
-A `Draft` contains the résumé, selected template, and section-heading language. `lib/latex.ts` escapes LaTeX control characters in user fields and fills the template-specific structures in `lib/latex-templates.ts`.
+`lib/latex.ts` escapes user fields and fills the selected design in `lib/latex-templates.ts`. Vanguard and Genesis retain their original article preambles, measurements, section rules and résumé macros. Genesis's malformed macro signature and invalid placeholders were repaired. Silicon embeds the original Trey Hunner `resume.cls` using `filecontents*`, preserving its copyright and permission notice.
 
-Vanguard and Genesis retain their original article preambles, dimensions, section formatting, and résumé macros. Genesis's malformed macro signature was repaired. Silicon retains the original Trey Hunner `resume.cls` and copyright/permission notice; it is embedded using `filecontents*` so the downloaded `.tex` is self-contained. Invalid original placeholders were replaced by explicit typed rendering.
+This is the original template architecture with correctness fixes, not the earlier simplified generic article export and not a claim of byte-for-byte unchanged backend source.
 
-This is not the previously simplified generic article export. It is also not byte-for-byte unmodified backend source: correctness and empty-section fixes are intentional and documented.
+## Actual compilation
 
-## Real PDF generation
+1. The user explicitly selects Compile PDF.
+2. The app validates cross-origin isolation and serializes the draft as LaTeX.
+3. A browser-only `@siglum/engine` 0.1.4 worker loads the TeX Live 2025 WebAssembly engine and core bundles.
+4. Template support files prepared during the site build are passed as `additionalFiles`.
+5. pdfLaTeX returns real PDF bytes. The app checks their signature and provides a Blob-backed preview/download.
 
-1. The user explicitly chooses **Compile PDF** or **Compile LaTeX PDF**.
-2. The app checks cross-origin isolation and serializes the current draft into LaTeX.
-3. A dynamically loaded `@siglum/engine` 0.1.4 compiler starts its same-origin worker.
-4. The worker loads public TeX Live 2025 engine and core bundle assets from Siglum's CDN.
-5. Original-template support packages, obtained during the site build, are passed as `additionalFiles`.
-6. pdfLaTeX runs inside WebAssembly and returns PDF bytes.
-7. The application validates the PDF signature, displays a Blob-backed PDF frame, and offers a download.
+A draft fingerprint protects against stale results. Failed compilation never silently falls back to printing HTML or presenting a previous document as current. There is a three-minute timeout.
 
-The PDF cache is tied to the entire draft fingerprint. Any content, template, or language change invalidates it. A failed or timed-out compile does not silently substitute browser printing, fabricated output, or the previous document.
+## Explicit template dependencies
 
-## Why packages are prepared at build time
+Core browser bundles omit packages used by these templates, including `titlesec` and `etoolbox`. `scripts/prepare-latex.mjs` resolves an explicit allowlist using build-time `kpsewhich`, copies unmodified text support files, and records the distribution version and file SHA-256 hashes in `public/latex-packages.json`. It preserves inline license notices and excludes font binaries and executable files.
 
-The browser engine's core bundles do not include every package required by the original templates. For example, the original Vanguard preamble uses `titlesec.sty`. Merely importing a compiler does not make these dependencies available.
+Use TeX Live with `texlive-latex-extra`, `texlive-fonts-recommended`, and `lmodern` installed to build. Visitors and deployed servers do not need native TeX. Runtime CTAN fallback is disabled. The generated support bundle is served by the application itself.
 
-`scripts/prepare-latex.mjs` downloads an explicit package allowlist from official historic TeX Live mirrors, extracts text support files, preserves their inline licenses, and records archive provenance and hashes. No résumé data is involved. Runtime CTAN fallback is disabled; the expected original-template dependencies are supplied explicitly.
+Siglum's optional `blake3-wasm` dependency has a broken browser entry in the pinned release. A narrow alias activates Siglum's built-in change-detection hash fallback. That fallback is not used for authentication, signatures, or security verification.
 
-The published `blake3-wasm` browser entry used by Siglum has a missing generated module. A narrowly scoped alias activates Siglum's own optional-accelerator fallback for local change detection. This is not a substitute for cryptographic verification or an authentication mechanism.
+## Privacy and scope
 
-## Privacy and limits
+Only public engine assets are requested externally. Résumé source stays in the page/worker. No OpenAI, Anthropic, or hosted PDF calls occur. Browser-local drafts, versions and package caches may remain on the device; asset hosts see ordinary asset requests.
 
-Résumé source remains in the page/worker and is not uploaded to Siglum, OpenAI, Anthropic, or a PDF service. Public asset servers still see normal requests for their files. Browser-local drafts, versions, and runtime caches may persist on the device.
+The ten language options localize headings, not the user's writing. The current pdfLaTeX font encoding supports the Latin-script fixtures tested here; unrestricted emoji, CJK and arbitrary Unicode are not claimed. Unsupported content should fail visibly rather than be invented or silently removed.
 
-The first compile can require substantial engine and package downloads. Browser memory limits and cross-origin isolation apply. There is a three-minute compile timeout. Downloads of the `.tex` source remain available without loading WebAssembly.
+The instant HTML preview and separately labeled HTML print option are approximate. Only the compiled PDF is exact LaTeX output.
 
-The ten language options localize headings only. pdfLaTeX with the selected font encoding supports the tested Latin-script content; arbitrary emoji, CJK, or other Unicode characters are not claimed to work. A failing character should produce a visible compile error, not invented or silently removed content. For unrestricted Unicode, a separately tested XeLaTeX/LuaLaTeX path would be needed.
+## Verification
 
-The live HTML preview and the separately labeled HTML print option are convenient approximations. Only the compiled PDF is the exact LaTeX output.
+- 13 core checks for normalization, backup fidelity, escaping, template structure and disconnected API behavior.
+- 39 native compilations: three templates × ten heading languages, plus special-character, empty and multi-page fixtures per template. PDF validity and extracted text are checked.
+- Independent Chromium/WebAssembly compilation of all three original templates, with real PDF bytes and external-request assertions.
+- Production Worker tests for navigation, editing, undo/redo, persistence, versions, mock AI review, source/PDF downloads, invalidation, mobile/reduced-motion layout and unhandled errors.
 
-## Test coverage
-
-- Thirteen core checks: normalization, backups, non-truncation, escaping, template/language source structure, and disconnected API behavior.
-- Thirty-nine native compilations: all three templates in ten heading languages, plus special-character, empty-document, and multi-page fixtures for every template. PDF validity and extracted content are checked.
-- Isolated browser compilation: actual Chromium, WebAssembly, downloaded public assets, all three original templates, PDF signature/content validation, and no résumé upload.
-- Production Worker browser tests: navigation, editing, autosave, undo/redo, saved versions, explicit mock AI review, raw source and PDF downloads, stale-PDF invalidation, mobile layout, and browser-error capture.
-
-Current pass/fail results and evidence belong to the GitHub Actions run for the commit being reviewed. Do not infer a successful deployment from a successful source build.
+Use the Actions result for the exact reviewed commit as the pass/fail source of truth. A passing build or a merged PR is not evidence that an external hosting platform deployed that commit.
