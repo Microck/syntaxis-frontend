@@ -3,8 +3,7 @@ import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
-import { sampleResume, templates, languages, toLatex } from '../lib/resume.ts';
-
+import { sampleResume, templates, toLatex } from '../lib/resume.ts';
 const root = process.cwd();
 const deps = process.env.COMPILER_TEST_DEPS || root;
 const requireTest = createRequire(path.join(deps, 'package.json'));
@@ -14,7 +13,7 @@ mkdirSync('compiler-evidence', { recursive: true });
 const bundle = await build({
   stdin: { contents: "import { compileLatexPdf } from './lib/latex-pdf.ts'; window.compileResume = compileLatexPdf;", resolveDir: root },
   bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022',
-  alias: { '@siglum/engine': requireTest.resolve('@siglum/engine') },
+  alias: { '@siglum/engine': requireTest.resolve('@siglum/engine'), 'blake3-wasm/browser.js': path.join(root, 'vendor/siglum-optional-hash.js') },
 });
 const worker = readFileSync(path.join(path.dirname(requireTest.resolve('@siglum/engine')), 'worker.js'));
 const headers = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp', 'Cache-Control': 'no-store' };
@@ -28,7 +27,7 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const report = { compiled: [], errors: [], requests: [] };
 page.on('pageerror', error => report.errors.push(error.message));
-page.on('console', message => { if (message.type() === 'error') console.log('BROWSER', message.text()); });
+page.on('console', message => console.log('BROWSER', message.type(), message.text().slice(0, 500)));
 page.on('request', request => { if (!request.url().startsWith('http://127.0.0.1')) report.requests.push({ method: request.method(), url: request.url(), hasBody: Boolean(request.postData()) }); });
 try {
   await page.goto('http://127.0.0.1:5181');
