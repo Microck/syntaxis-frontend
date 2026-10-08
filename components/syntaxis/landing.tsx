@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import Link from '@/components/syntaxis/navigation-link';
 import { ArrowUpRight, Download, Layers3, Check, Menu, X, Plus, BookOpen, PenLine, Home } from 'lucide-react';
 import { Toolbar } from '@base-ui/react/toolbar';
 import { ToggleGroup, Toggle } from '@/components/animate-ui/components/base/toggle-group';

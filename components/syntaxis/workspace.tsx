@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import Link from 'next/link';
+import Link from '@/components/syntaxis/navigation-link';
 import { Toolbar } from '@base-ui/react/toolbar';
 import { toast } from 'sonner';
 import { FileText, PenLine, Layers3, History, Plus, Upload, Download, Check, Undo2, Redo2, ChevronDown, Trash2, Save, Printer, CodeXml, CircleHelp, GitFork, BriefcaseBusiness, UserRound, Sparkles, Loader2, Laptop, Eye, ShieldCheck, Globe2, FileJson, RotateCcw, LogOut } from 'lucide-react';

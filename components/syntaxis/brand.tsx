@@ -1,2 +1,2 @@
-import Link from 'next/link';
+import Link from '@/components/syntaxis/navigation-link';
 export function Brand({ inverse = false }: { inverse?: boolean }) { return <Link href="/" aria-label="Syntaxis home" className={'brand ' + (inverse ? 'brand-inverse' : '')}><span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="m11 7-8 9 8 9M21 7l8 9-8 9M18 4l-4 24" stroke="currentColor" strokeWidth="2.5" /></svg></span><span>syntaxis<span className="brand-period">.</span></span></Link>; }
