@@ -1,14 +1,29 @@
-import { mkdtemp, mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, basename, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Explicit TeX Live 2025 dependencies missing from Siglum's core bundles.
-// Build-time downloads contain only public package code, never résumé data.
+// Explicit dependencies of the original templates, absent from the core bundle.
+// Official TUG historic mirrors, fixed TeX Live release; TLS is always verified.
 const packages = ['titlesec', 'enumitem', 'fancyhdr', 'preprint', 'parskip', 'geometry', 'marvosym'];
-const archiveRoot = 'https://ftp.tug.org/historic/systems/texlive/2025/tlnet-final/archive';
+const archiveRoots = [
+  'https://texlive.info/historic/systems/texlive/2025/tlnet-final/archive',
+  'https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final/archive',
+];
+async function download(name) {
+  const errors = [];
+  for (const root of archiveRoots) {
+    const url = `${root}/${name}.tar.xz`;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(45000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return { url, bytes: Buffer.from(await response.arrayBuffer()) };
+    } catch (error) { errors.push(`${url}: ${error.message}`); }
+  }
+  throw new Error(`Cannot obtain TeX Live package ${name}. ${errors.join('; ')}`);
+}
 export async function prepareLatexAssets() {
   const destination = resolve('public/latex-packages.json');
   try { const previous = JSON.parse(await readFile(destination, 'utf8')); if (previous.version === 1 && previous.files?.['titlesec.sty']) return; } catch { /* Generate on the first build. */ }
@@ -16,10 +31,7 @@ export async function prepareLatexAssets() {
   const files = {}, provenance = [];
   try {
     for (const name of packages) {
-      const url = `${archiveRoot}/${name}.tar.xz`;
-      const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
-      if (!response.ok) throw new Error(`Cannot download TeX Live package ${name}: HTTP ${response.status}`);
-      const bytes = Buffer.from(await response.arrayBuffer());
+      const { url, bytes } = await download(name);
       const archive = join(temporary, name + '.tar.xz');
       await writeFile(archive, bytes);
       const entries = execFileSync('tar', ['-tJf', archive], { encoding: 'utf8' }).split('\n').filter(entry => entry.startsWith('tex/') && /\.(?:sty|def|fd|cfg|tex|clo|cls)$/.test(entry));
