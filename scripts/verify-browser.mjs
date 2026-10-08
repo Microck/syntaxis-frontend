@@ -26,7 +26,12 @@ async function compileCurrent(name){
 try{
   const response=await page.goto(origin,{waitUntil:'networkidle'});assert.equal(response.status(),200);
   await page.getByRole('heading',{name:'Your work. Well told.'}).waitFor();
-  await page.evaluate(()=>document.fonts.ready);await assertNoOverflow(page);await capture('landing-desktop');
+  await page.evaluate(()=>document.fonts.ready);
+  await page.waitForFunction(()=>document.querySelector('[data-decode-text]')?.textContent==='Well told.' && Number(getComputedStyle(document.querySelector('.hero-description')).opacity)>.99 && Number(getComputedStyle(document.querySelector('.paper-front')).opacity)>.99);
+  await assertNoOverflow(page);await page.screenshot({path:'browser-evidence/landing-desktop.png'});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-reveal]')].every(el=>Number(getComputedStyle(el).opacity)>.99));
+  await capture('landing-full-reduced-motion');
   await page.getByRole('link',{name:'Open workspace',exact:true}).click();
   await page.getByLabel('Full name',{exact:true}).waitFor();assert(new URL(page.url()).pathname==='/workspace');
   assert.equal(await page.evaluate(()=>crossOriginIsolated),true);pass('Landing-to-workspace navigation and cross-origin isolation');
@@ -55,6 +60,10 @@ try{
     await compileCurrent(template.toLowerCase());
   }
   await capture('workspace-compiled-pdf');
+  await page.evaluate(()=>{window.print=()=>{window.__printText=document.querySelector('.workspace-paper')?.textContent||'';};});
+  await page.getByRole('button',{name:'Export',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Print HTML preview',exact:true}).click();
+  assert((await page.evaluate(()=>window.__printText)).includes('Jordan Vale'));pass('HTML print still has document content after viewing a PDF');
   const tex=await downloadFrom(async()=>{await page.getByRole('button',{name:'Export',exact:true}).click();await page.getByRole('menuitem',{name:'Original template (.tex)',exact:true}).click();},'exported-resume.tex');
   assert(tex.toString().includes('original genesis template'));assert(tex.toString().includes('Jordan Vale'));pass('Original .tex export matches selected template and data');
   await page.locator('.editor-tab-list').getByRole('tab',{name:'Content',exact:true}).click();
