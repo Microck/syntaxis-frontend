@@ -3,7 +3,9 @@
   "version": "1.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=24.8.0"
+  },
   "scripts": {
     "predev": "node scripts/prepare-assets.mjs",
     "dev": "vinext dev --port 5173",
@@ -14,7 +16,8 @@
     "test:core": "node --no-warnings --experimental-strip-types scripts/verify-core.mjs",
     "test:latex": "node --no-warnings --experimental-strip-types scripts/verify-latex.mjs",
     "test:routes": "node scripts/verify-routes.mjs",
-    "test:browser": "node scripts/verify-browser.mjs"
+    "test:browser": "node scripts/verify-browser.mjs",
+    "test:e2e": "node e2e-runner.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
@@ -37,12 +40,14 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
     "@cloudflare/workers-types": "4.20260515.1",
+    "@e2e-dev/web": "0.15.2",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
+    "e2e": "0.21.2",
     "playwright": "1.55.1",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
@@ -52,5 +57,9 @@
     "vite": "8.0.13",
     "wrangler": "4.92.0"
   },
-  "overrides": { "miniflare": { "sharp": "0.35.4" } }
+  "overrides": {
+    "miniflare": {
+      "sharp": "0.35.4"
+    }
+  }
 }

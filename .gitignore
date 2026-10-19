@@ -24,3 +24,5 @@ npm-debug.log*
 /public/fonts/*.woff*
 /public/fonts/*.ttf
 /public/fonts/*.otf
+
+/.e2e/

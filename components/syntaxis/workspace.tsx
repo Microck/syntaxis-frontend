@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from '@/components/syntaxis/navigation-link';
 import { flushSync } from 'react-dom';
 import { Toolbar } from '@base-ui/react/toolbar';
@@ -25,7 +25,7 @@ type Modal = 'import' | 'save' | 'account' | 'help' | 'generate' | null;
 const errorMessage = (e: unknown) => e instanceof Error ? e.message : 'Something went wrong. Please try again.';
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 export default function Workspace({ apiBaseUrl, aiEnabled, importsEnabled }: { apiBaseUrl: string; aiEnabled: boolean; importsEnabled: boolean }) {
-  const [draft, setDraft] = useState<Draft>(clone(defaultDraft));
+  const [draft, setDraft] = useState<Draft>(() => clone(defaultDraft));
   const [versions, setVersions] = useState<Version[]>([]);
   const [past, setPast] = useState<Draft[]>([]);
   const [future, setFuture] = useState<Draft[]>([]);
@@ -63,7 +63,9 @@ export default function Workspace({ apiBaseUrl, aiEnabled, importsEnabled }: { a
   const api = useMemo(() => { try { return createApi(apiBaseUrl); } catch { return createApi(''); } }, [apiBaseUrl]);
   const r = draft.resume;
   const currentTemplate = templates.find(t => t.id === draft.template)!;
-  const draftFingerprint = JSON.stringify(draft);
+  const draftFingerprint = useMemo(() => JSON.stringify(draft), [draft]);
+  const saveStatusRef = useRef(saveStatus);
+  useLayoutEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
   const pdfFresh = !!compiledPdf && compiledPdf.fingerprint === draftFingerprint;
   useEffect(() => () => { if (compiledPdf) URL.revokeObjectURL(compiledPdf.url); }, [compiledPdf]);
   useEffect(() => {
@@ -92,18 +94,18 @@ export default function Workspace({ apiBaseUrl, aiEnabled, importsEnabled }: { a
     if (!ready) return;
     pendingDraft.current = draft; setSaveStatus('Saving…');
     const timer = setTimeout(() => {
-      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); setSaveStatus('Saved on this device'); }
+      try { localStorage.setItem(DRAFT_KEY, draftFingerprint); setSaveStatus('Saved on this device'); }
       catch { setSaveStatus('Not saved · download a backup'); }
     }, 450);
     return () => clearTimeout(timer);
-  }, [draft, ready]);
+  }, [draft, draftFingerprint, ready]);
   useEffect(() => {
     if (!ready) return;
     const flush = () => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(pendingDraft.current)); } catch { /* Visible status reports failures. */ } };
-    const beforeUnload = (e: BeforeUnloadEvent) => { flush(); if (saveStatus.startsWith('Not saved')) { e.preventDefault(); e.returnValue = ''; } };
+    const beforeUnload = (e: BeforeUnloadEvent) => { flush(); if (saveStatusRef.current.startsWith('Not saved')) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('pagehide', flush); window.addEventListener('beforeunload', beforeUnload);
     return () => { flush(); window.removeEventListener('pagehide', flush); window.removeEventListener('beforeunload', beforeUnload); };
-  }, [ready, saveStatus]);
+  }, [ready]);
   useEffect(() => {
     if (!api.configured) { setConnection('On this device'); return; }
     let active = true;

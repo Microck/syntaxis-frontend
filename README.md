@@ -4,7 +4,7 @@ A monochrome résumé studio with an animated landing page, editable workspace, 
 
 ## Run
 
-Use Node.js 22.13+, npm, and a build-time TeX Live installation. On Ubuntu/Debian:
+Use Node.js 24.8+, npm, and a build-time TeX Live installation. On Ubuntu/Debian:
 
 ```sh
 sudo apt-get install texlive-latex-extra texlive-fonts-recommended lmodern
@@ -63,6 +63,9 @@ npm run build
 npm run test:routes
 npx playwright install --with-deps chromium
 npm run test:browser
+# With the same production Worker running:
+npx e2e-web install chromium
+npm run test:e2e
 # Requires pdfinfo/pdftotext from poppler-utils:
 npm run test:latex
 ```
@@ -80,3 +83,5 @@ This repository intentionally has no production deployment token or automatic de
 `app/` contains routes/styles; `components/syntaxis/` contains the landing/editor; `lib/latex*` contains the original-template renderer/compiler; `scripts/` contains asset preparation and checks.
 
 See `COMPONENT_SOURCES.md` and `licenses/`. Third-party components retain their own licenses, including Animate UI's Commons Clause condition. Silicon retains Trey Hunner's original class notice. TeX package notices remain in the unmodified support files; downstream distribution must preserve their applicable source and license requirements. Font binaries are fetched during preparation, not distributed in this repository; retain `public/fonts/OFL.txt` with deployed font assets.
+
+The pinned tester-army/e2e suite additionally covers desktop/mobile editing, undo/redo, reload persistence, named-version restoration, single-write debounced autosave, and pending-edit flush. Its synthetic drafts stay local; no AI provider or account is used. Existing real-PDF browser and native LaTeX checks remain in place.

@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import * as model from '../lib/resume.ts';
 import * as service from '../lib/api.ts';
+import { parseSupportFiles } from '../lib/latex-pdf.ts';
 let checks=0;
 const check=(name,fn)=>{fn();checks++;console.log('PASS '+name);};
+check('Malformed TeX support bundles fail before reaching the compiler',()=>{
+  for (const value of [null, [], {}, {version:1,files:null}, {version:1,files:[]}, {version:2,files:{'titlesec.sty':'text'}}, {version:1,files:{'titlesec.sty':'text','other.sty':42}}]) assert.throws(()=>parseSupportFiles(value),/Invalid template dependency bundle/);
+  assert.deepEqual(parseSupportFiles({version:1,files:{'titlesec.sty':'text','other.sty':'more'}}),{'titlesec.sty':'text','other.sty':'more'});
+});
 const sample={resume:structuredClone(model.sampleResume),template:'vanguard',language:'en',title:'Engineering — Autumn'};
 check('JSON round trip preserves résumé content',()=>{
   const restored=model.normalizeDraft(JSON.parse(JSON.stringify(sample)));
