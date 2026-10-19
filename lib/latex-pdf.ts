@@ -7,12 +7,20 @@ let packagePromise: Promise<Record<string, string>> | null = null;
 let busy = false;
 let diagnostics: string[] = [];
 let reportProgress: (message: string) => void = () => {};
+export function parseSupportFiles(data: unknown): Record<string, string> {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid template dependency bundle.');
+  const bundle = data as Record<string, unknown>;
+  const files = bundle.files;
+  if (bundle.version !== 1 || files === null || typeof files !== 'object' || Array.isArray(files)) throw new Error('Invalid template dependency bundle.');
+  const entries = files as Record<string, unknown>;
+  if (typeof entries['titlesec.sty'] !== 'string' || !Object.values(entries).every(value => typeof value === 'string')) throw new Error('Invalid template dependency bundle.');
+  return entries as Record<string, string>;
+}
 async function supportFiles(): Promise<Record<string, string>> {
   if (!packagePromise) packagePromise = fetch('/latex-packages.json', { signal: AbortSignal.timeout(30000) }).then(async response => {
     if (!response.ok) throw new Error('Template dependencies are unavailable. Rebuild the deployment assets.');
     const data = await response.json();
-    if (data.version !== 1 || typeof data.files?.['titlesec.sty'] !== 'string') throw new Error('Invalid template dependency bundle.');
-    return data.files;
+    return parseSupportFiles(data);
   }).catch(error => { packagePromise = null; throw error; });
   return packagePromise;
 }
