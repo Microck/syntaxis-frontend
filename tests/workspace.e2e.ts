@@ -38,9 +38,22 @@ test('autosave writes each settled edit once and flushes a pending edit on navig
   await expect(screen.getByText('Saved on this device', { exact: true })).toBeVisible();
   const name = screen.getByRole('textbox', { name: 'Full name', exact: true });
   await name.fill('Riley Save');
+  await expect.poll(() => browser.evaluate(() => (window as unknown as { draftWrites: number }).draftWrites)).toBe(1);
   await expect(screen.getByText('Saved on this device', { exact: true })).toBeVisible();
+  // Let the saved-status commit and its passive effects finish before checking
+  // that status changes did not cause additional synchronous flushes.
+  await browser.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   expect(await browser.evaluate(() => (window as unknown as { draftWrites: number }).draftWrites)).toBe(1);
+  // Hold only the app's debounce timer beyond this test's timeout. Navigation
+  // must flush the pending draft; a slow test cannot accidentally use autosave.
+  await browser.evaluate(() => {
+    const original = window.setTimeout.bind(window);
+    window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
+      original(handler, timeout === 450 ? 60000 : timeout, ...args)) as typeof window.setTimeout;
+  });
   await name.fill('Riley Pending');
+  await expect(name).toHaveValue('Riley Pending');
+  expect(await browser.evaluate(() => JSON.parse(localStorage.getItem('syntaxis.draft.v1')!).resume.name)).toBe('Riley Save');
   await app.open('/workspace');
   await expect(name).toHaveValue('Riley Pending');
 });

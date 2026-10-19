@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from '@/components/syntaxis/navigation-link';
 import { flushSync } from 'react-dom';
 import { Toolbar } from '@base-ui/react/toolbar';
@@ -65,7 +65,7 @@ export default function Workspace({ apiBaseUrl, aiEnabled, importsEnabled }: { a
   const currentTemplate = templates.find(t => t.id === draft.template)!;
   const draftFingerprint = useMemo(() => JSON.stringify(draft), [draft]);
   const saveStatusRef = useRef(saveStatus);
-  saveStatusRef.current = saveStatus;
+  useLayoutEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
   const pdfFresh = !!compiledPdf && compiledPdf.fingerprint === draftFingerprint;
   useEffect(() => () => { if (compiledPdf) URL.revokeObjectURL(compiledPdf.url); }, [compiledPdf]);
   useEffect(() => {
